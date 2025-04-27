@@ -1,0 +1,359 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cashier - Paduppa Resort Cafe & Resto</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Nunito Sans', sans-serif;
+    }
+    .font-bold {
+      font-weight: 700;
+    }
+    .font-regular {
+      font-weight: 400;
+    }
+  </style>
+</head>
+<body class="bg-amber-50">
+  <!-- Login Modal -->
+  <div id="login-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white p-8 rounded-lg w-full max-w-sm">
+      <h2 class="text-2xl font-bold text-amber-800 mb-6">Cashier Login</h2>
+      <form id="login-form">
+        <div class="mb-4">
+          <label for="username" class="block text-amber-800 font-bold mb-2">Username</label>
+          <input type="text" id="username" class="w-full p-3 border border-amber-300 rounded focus:outline-none focus:border-amber-400 font-regular" placeholder="Enter username" required>
+        </div>
+        <div class="mb-4">
+          <label for="password" class="block text-amber-800 font-bold mb-2">Password</label>
+          <input type="password" id="password" class="w-full p-3 border border-amber-300 rounded focus:outline-none focus:border-amber-400 font-regular" placeholder="Enter password" required>
+        </div>
+        <div class="text-right">
+          <button type="submit" class="bg-amber-400 text-white px-4 py-2 rounded hover:bg-amber-500 font-bold">Login</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Cashier Dashboard -->
+  <div id="cashier-dashboard" class="hidden max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+    <h1 class="text-3xl font-bold text-amber-800 mb-8">Cashier Dashboard</h1>
+    <button id="logout" class="bg-amber-400 text-white px-4 py-2 rounded hover:bg-amber-500 font-bold mb-8">Logout</button>
+
+    <!-- Menu Management -->
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold text-amber-700 mb-4">Menu Management</h2>
+      
+      <!-- Add New Item -->
+      <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+        <h3 class="text-xl font-bold text-amber-800 mb-4">Add New Item</h3>
+        <form id="add-item-form">
+          <div class="mb-4">
+            <label for="item-name" class="block text-amber-800 font-bold mb-2">Item Name</label>
+            <input type="text" id="item-name" class="w-full p-3 border border-amber-300 rounded focus:outline-none focus:border-amber-400 font-regular" placeholder="Enter item name" required>
+          </div>
+          <div class="mb-4">
+            <label for="item-price" class="block text-amber-800 font-bold mb-2">Price (IDR)</label>
+            <input type="number" id="item-price" class="w-full p-3 border border-amber-300 rounded focus:outline-none focus:border-amber-400 font-regular" placeholder="Enter price" min="0" required>
+          </div>
+          <div class="mb-4">
+            <label for="item-image" class="block text-amber-800 font-bold mb-2">Image</label>
+            <input type="file" id="item-image" accept="image/*" class="w-full p-3 border border-amber-300 rounded font-regular">
+          </div>
+          <div class="mb-4">
+            <label for="item-category" class="block text-amber-800 font-bold mb-2">Category</label>
+            <select id="item-category" class="w-full p-3 border border-amber-300 rounded focus:outline-none focus:border-amber-400 font-regular" required>
+              <option value="food">Food</option>
+              <option value="beverage">Beverage</option>
+            </select>
+          </div>
+          <div class="text-right">
+            <button type="submit" class="bg-amber-400 text-white px-4 py-2 rounded hover:bg-amber-500 font-bold">Add Item</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Food Menu -->
+      <div class="mb-6">
+        <h3 class="text-xl font-bold text-amber-800 mb-4">Food Menu</h3>
+        <table class="w-full bg-white rounded-lg shadow-md">
+          <thead>
+            <tr class="bg-amber-100">
+              <th class="p-3 text-left font-bold text-amber-800">Image</th>
+              <th class="p-3 text-left font-bold text-amber-800">Name</th>
+              <th class="p-3 text-left font-bold text-amber-800">Price (IDR)</th>
+              <th class="p-3 text-left font-bold text-amber-800">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="food-menu"></tbody>
+        </table>
+      </div>
+
+      <!-- Beverage Menu -->
+      <div>
+        <h3 class="text-xl font-bold text-amber-800 mb-4">Beverage Menu</h3>
+        <table class="w-full bg-white rounded-lg shadow-md">
+          <thead>
+            <tr class="bg-amber-100">
+              <th class="p-3 text-left font-bold text-amber-800">Image</th>
+              <th class="p-3 text-left font-bold text-amber-800">Name</th>
+              <th class="p-3 text-left font-bold text-amber-800">Price (IDR)</th>
+              <th class="p-3 text-left font-bold text-amber-800">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="beverage-menu"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Incoming Orders -->
+    <section class="mb-12">
+      <h2 class="text-2xl font-bold text-amber-700 mb-4">Incoming Orders</h2>
+      <div id="orders" class="space-y-6"></div>
+    </section>
+
+    <!-- Incoming Reservations -->
+    <section>
+      <h2 class="text-2xl font-bold text-amber-700 mb-4">Incoming Reservations</h2>
+      <div id="reservations" class="space-y-6"></div>
+    </section>
+  </div>
+
+  <script>
+    // Login Functionality
+    const loginModal = document.getElementById('login-modal');
+    const cashierDashboard = document.getElementById('cashier-dashboard');
+    const loginForm = document.getElementById('login-form');
+
+    loginForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+
+      // Demo credentials (replace with backend authentication in production)
+      if (username === 'admin' && password === 'paduppa123') {
+        loginModal.classList.add('hidden');
+        cashierDashboard.classList.remove('hidden');
+        updateMenuUI();
+        updateOrdersUI();
+        updateReservationsUI();
+      } else {
+        alert('Invalid username or password.');
+      }
+    });
+
+    // Logout
+    document.getElementById('logout').addEventListener('click', () => {
+      loginModal.classList.remove('hidden');
+      cashierDashboard.classList.add('hidden');
+      loginForm.reset();
+    });
+
+    // Add New Item
+    document.getElementById('add-item-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('item-name').value;
+      const price = parseInt(document.getElementById('item-price').value);
+      const imageInput = document.getElementById('item-image');
+      const category = document.getElementById('item-category').value;
+
+      let image = 'https://via.placeholder.com/150';
+      if (imageInput.files[0]) {
+        const reader = new FileReader();
+        reader.onload = async () => {
+          image = reader.result;
+          await fetch(`/api/menu/${category}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, price, image })
+          });
+          updateMenuUI();
+          document.getElementById('add-item-form').reset();
+        };
+        reader.readAsDataURL(imageInput.files[0]);
+      } else {
+        await fetch(`/api/menu/${category}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, price, image })
+        });
+        updateMenuUI();
+        document.getElementById('add-item-form').reset();
+      }
+    });
+
+    // Update Menu UI
+    async function updateMenuUI() {
+      const response = await fetch('/api/menu');
+      const menu = await response.json();
+      const foodMenu = document.getElementById('food-menu');
+      const beverageMenu = document.getElementById('beverage-menu');
+      foodMenu.innerHTML = '';
+      beverageMenu.innerHTML = '';
+
+      menu.food.forEach((item, index) => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td class="p-3"><img src="${item.image}" alt="${item.name}" class="w-16 h-16 object-cover rounded"></td>
+          <td class="p-3 font-regular"><input type="text" value="${item.name}" class="edit-name w-full p-1 border border-amber-300 rounded" data-category="food" data-index="${index}"></td>
+          <td class="p-3 font-regular"><input type="number" value="${item.price}" class="edit-price w-full p-1 border border-amber-300 rounded" data-category="food" data-index="${index}"></td>
+          <td class="p-3">
+            <button class="delete-item bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600 font-bold" data-category="food" data-index="${index}">Delete</button>
+          </td>
+        `;
+        foodMenu.appendChild(row);
+      });
+
+      menu.beverage.forEach((item, index) => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td class="p-3"><img src="${item.image}" alt="${item.name}" class="w-16 h-16 object-cover rounded"></td>
+          <td class="p-3 font-regular"><input type="text" value="${item.name}" class="edit-name w-full p-1 border border-amber-300 rounded" data-category="beverage" data-index="${index}"></td>
+          <td class="p-3 font-regular"><input type="number" value="${item.price}" class="edit-price w-full p-1 border border-amber-300 rounded" data-category="beverage" data-index="${index}"></td>
+          <td class="p-3">
+            <button class="delete-item bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600 font-bold" data-category="beverage" data-index="${index}">Delete</button>
+          </td>
+        `;
+        beverageMenu.appendChild(row);
+      });
+
+      // Edit Name and Price
+      document.querySelectorAll('.edit-name').forEach(input => {
+        input.addEventListener('change', async (e) => {
+          const category = e.target.dataset.category;
+          const index = e.target.dataset.index;
+          const response = await fetch('/api/menu');
+          const menu = await response.json();
+          menu[category][index].name = e.target.value;
+          await fetch(`/api/menu/${category}/${index}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(menu[category][index])
+          });
+        });
+      });
+
+      document.querySelectorAll('.edit-price').forEach(input => {
+        input.addEventListener('change', async (e) => {
+          const category = e.target.dataset.category;
+          const index = e.target.dataset.index;
+          const response = await fetch('/api/menu');
+          const menu = await response.json();
+          menu[category][index].price = parseInt(e.target.value);
+          await fetch(`/api/menu/${category}/${index}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(menu[category][index])
+          });
+        });
+      });
+
+      // Delete Item
+      document.querySelectorAll('.delete-item').forEach(button => {
+        button.addEventListener('click', async () => {
+          const category = button.dataset.category;
+          const index = button.dataset.index;
+          await fetch(`/api/menu/${category}/${index}`, {
+            method: 'DELETE'
+          });
+          updateMenuUI();
+        });
+      });
+    }
+
+    // Update Orders UI
+    async function updateOrdersUI() {
+      const response = await fetch('/api/orders');
+      const orders = await response.json();
+      const ordersDiv = document.getElementById('orders');
+      ordersDiv.innerHTML = '';
+
+      orders.forEach((order, index) => {
+        const orderElement = document.createElement('div');
+        orderElement.className = 'bg-white p-6 rounded-lg shadow-md';
+        orderElement.innerHTML = `
+          <h3 class="text-lg font-bold text-amber-800 mb-2">Order #${index + 1} - ${order.timestamp}</h3>
+          <p class="font-regular"><strong>Name:</strong> ${order.customerName}</p>
+          <p class="font-regular"><strong>Room:</strong> ${order.room || '-'}</p>
+          <p class="font-regular"><strong>Table:</strong> ${order.table || '-'}</p>
+          <p class="font-regular"><strong>Items:</strong></p>
+          <ul class="list-disc pl-5 font-regular">
+            ${order.items.map(item => `<li>${item.name} x${item.quantity} (IDR ${item.price.toLocaleString()})</li>`).join('')}
+          </ul>
+          <p class="font-bold text-amber-400 mt-2">Subtotal: IDR ${order.subtotal.toLocaleString()}</p>
+        `;
+        ordersDiv.appendChild(orderElement);
+      });
+    }
+
+    // Update Reservations UI
+    async function updateReservationsUI() {
+      const response = await fetch('/api/reservations');
+      const reservations = await response.json();
+      const reservationsDiv = document.getElementById('reservations');
+      reservationsDiv.innerHTML = '';
+
+      reservations.forEach((reservation, index) => {
+        const reservationElement = document.createElement('div');
+        reservationElement.className = 'bg-white p-6 rounded-lg shadow-md';
+        reservationElement.innerHTML = `
+          <h3 class="text-lg font-bold text-amber-800 mb-2">Reservation #${index + 1} - ${reservation.timestamp}</h3>
+          <p class="font-regular"><strong>Name:</strong> ${reservation.name}</p>
+          <p class="font-regular"><strong>Date:</strong> ${reservation.date}</p>
+          <p class="font-regular"><strong>Time:</strong> ${reservation.time}</p>
+          <p class="font-regular"><strong>Guests:</strong> ${reservation.guests}</p>
+          <p class="font-regular"><strong>Room/Table:</strong> ${reservation.roomTable || '-'}</p>
+          <p class="font-regular"><strong>Phone:</strong> ${reservation.phone || '-'}</p>
+          <p class="font-regular"><strong>Email:</strong> ${reservation.email || '-'}</p>
+          <p class="font-regular"><strong>Special Requests:</strong> ${reservation.requests || '-'}</p>
+        `;
+        reservationsDiv.appendChild(reservationElement);
+      });
+    }
+  </script>
+</body>
+</html>

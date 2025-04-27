@@ -1,0 +1,441 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Paduppa Resort Cafe & Resto</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Nunito Sans', sans-serif;
+    }
+    .font-bold {
+      font-weight: 700;
+    }
+    .font-regular {
+      font-weight: 400;
+    }
+  </style>
+</head>
+<body class="bg-amber-50">
+  <!-- Navbar -->
+  <nav class="bg-white shadow-md fixed w-full z-10">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between h-16">
+        <div class="flex items-center">
+          <h1 class="text-2xl font-bold text-amber-800">Paduppa Resort Cafe & Resto</h1>
+        </div>
+        <div class="flex items-center space-x-4">
+          <a href="#home" class="text-amber-700 hover:text-amber-900 font-bold">Home</a>
+          <a href="#menu" class="text-amber-700 hover:text-amber-900 font-bold">Menu</a>
+          <a href="#about" class="text-amber-700 hover:text-amber-900 font-bold">About</a>
+          <a href="#contact" class="text-amber-700 hover:text-amber-900 font-bold">Contact</a>
+          <a href="#reserve" class="text-amber-700 hover:text-amber-900 font-bold">Reserve</a>
+          <button id="cart-toggle" class="text-amber-700 hover:text-amber-900">
+            <i class="fas fa-shopping-cart"></i> <span id="cart-count" class="bg-amber-400 text-white rounded-full px-2 py-1 text-xs font-bold">0</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Cart Modal -->
+  <div id="cart-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+    <div class="bg-white p-8 rounded-lg w-full max-w-md">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-xl font-bold text-amber-800">Shopping Cart</h2>
+        <button id="close-cart" class="text-amber-700 hover:text-amber-900">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <!-- Customer Info Inputs -->
+      <div class="mb-6">
+        <label for="customer-name" class="block text-amber-800 font-bold mb-2">Customer Name</label>
+        <input type="text" id="customer-name" class="w-full p-3 border border-amber-300 rounded focus:outline-none focus:border-amber-400 font-regular" placeholder="Enter your name" required>
+        <label for="room" class="block text-amber-800 font-bold mt-4 mb-2">Room</label>
+        <input type="text" id="room" class="w-full p-3 border border-amber-300 rounded focus:outline-none focus:border-amber-400 font-regular" placeholder="Enter room number">
+        <label for="table" class="block text-amber-800 font-bold mt-4 mb-2">Table</label>
+        <input type="text" id="table" class="w-full p-3 border border-amber-300 rounded focus:outline-none focus:border-amber-400 font-regular" placeholder="Enter table number">
+      </div>
+      <div id="cart-items" class="mb-6"></div>
+      <div class="text-right">
+        <p class="text-lg font-bold text-amber-800">Subtotal: IDR <span id="cart-subtotal">0</span></p>
+        <button id="confirm-checkout" class="bg-amber-400 text-white px-4 py-2 rounded hover:bg-amber-500 mt-4 font-bold">Confirm Checkout</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Checkout Button -->
+  <button id="floating-checkout" class="fixed bottom-6 right-6 bg-amber-400 text-white px-4 py-3 rounded-full shadow-lg hover:bg-amber-500 z-20 flex items-center space-x-2">
+    <i class="fas fa-shopping-cart"></i>
+    <span class="font-bold">Checkout (<span id="floating-cart-count">0</span>)</span>
+  </button>
+
+  <!-- Hero Section -->
+  <section id="home" class="h-screen bg-cover bg-center flex items-center justify-center" style="background-image: url('https://images.unsplash.com/photo-1507525428034-b723cf961d3e')">
+    <div class="text-center text-white bg-amber-900 bg-opacity-60 p-8 rounded">
+      <h2 class="text-4xl font-bold mb-4">Welcome to Paduppa Resort Cafe & Resto</h2>
+      <p class="text-lg mb-6 font-regular">Savor delicious cuisine with breathtaking Bira Beach sunset views.</p>
+      <a href="#menu" class="bg-amber-400 text-white px-6 py-3 rounded hover:bg-amber-500 font-bold">View Menu</a>
+    </div>
+  </section>
+
+  <!-- Menu Section -->
+  <section id="menu" class="py-16 bg-amber-100">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <h2 class="text-3xl font-bold text-center text-amber-800 mb-8">Our Menu</h2>
+      
+      <!-- Food Subsection -->
+      <h3 class="text-2xl font-bold text-amber-700 mb-4">Food</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
+        <div class="bg-white shadow-md rounded-lg p-6">
+          <img src="https://images.unsplash.com/photo-1594212699903-ec701fed9f9e" alt="Seafood Fried Rice" class="w-full h-48 object-cover rounded mb-4">
+          <h4 class="text-xl font-bold">Seafood Fried Rice</h4>
+          <p class="text-gray-600 font-regular">Fried rice with shrimp, squid, and coastal spices.</p>
+          <p class="text-amber-400 font-bold mt-2">IDR 85,000</p>
+          <button class="add-to-cart bg-amber-400 text-white px-4 py-2 rounded hover:bg-amber-500 mt-4 font-bold" data-name="Seafood Fried Rice" data-price="85000">Add to Cart</button>
+        </div>
+        <div class="bg-white shadow-md rounded-lg p-6">
+          <img src="https://images.unsplash.com/photo-1608897013039-887f21d8c804" alt="Sop Konro" class="w-full h-48 object-cover rounded mb-4">
+          <h4 class="text-xl font-bold">Sop Konro</h4>
+          <p class="text-gray-600 font-regular">Makassar-style beef rib soup with rich spices.</p>
+          <p class="text-amber-400 font-bold mt-2">IDR 95,000</p>
+          <button class="add-to-cart bg-amber-400 text-white px-4 py-2 rounded hover:bg-amber-500 mt-4 font-bold" data-name="Sop Konro" data-price="95000">Add to Cart</button>
+        </div>
+      </div>
+
+      <!-- Beverages Subsection -->
+      <h3 class="text-2xl font-bold text-amber-700 mb-4">Beverages</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div class="bg-white shadow-md rounded-lg p-6">
+          <img src="https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd" alt="Young Coconut Ice" class="w-full h-48 object-cover rounded mb-4">
+          <h4 class="text-xl font-bold">Young Coconut Ice</h4>
+          <p class="text-gray-600 font-regular">Fresh coconut water with palm sugar syrup.</p>
+          <p class="text-amber-400 font-bold mt-2">IDR 35,000</p>
+          <button class="add-to-cart bg-amber-400 text-white px-4 py-2 rounded hover:bg-amber-500 mt-4 font-bold" data-name="Young Coconut Ice" data-price="35000">Add to Cart</button>
+        </div>
+        <div class="bg-white shadow-md rounded-lg p-6">
+          <img src="https://images.unsplash.com/photo-1514326640560-7d063ef2aed5" alt="Cappuccino" class="w-full h-48 object-cover rounded mb-4">
+          <h4 class="text-xl font-bold">Cappuccino</h4>
+          <p class="text-gray-600 font-regular">Espresso with creamy milk foam.</p>
+          <p class="text-amber-400 font-bold mt-2">IDR 45,000</p>
+          <button class="add-to-cart bg-amber-400 text-white px-4 py-2 rounded hover:bg-amber-500 mt-4 font-bold" data-name="Cappuccino" data-price="45000">Add to Cart</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- About Section -->
+  <section id="about" class="py-16 bg-amber-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <h2 class="text-3xl font-bold text-center text-amber-800 mb-8">About Us</h2>
+      <p class="text-lg text-gray-600 text-center max-w-3xl mx-auto font-regular">
+        Located on the edge of Bira Beach, Paduppa Resort Cafe & Resto offers a culinary experience with a modern twist on Bugis-Makassar wooden ethnic design. Enjoy exquisite dishes while watching stunning sunsets by the cliff.
+      </p>
+    </div>
+  </section>
+
+  <!-- Contact Section -->
+  <section id="contact" class="py-16 bg-amber-100">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <h2 class="text-3xl font-bold text-center text-amber-800 mb-8">Contact Us</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div>
+          <p class="text-lg text-gray-600 mb-4 font-regular">Visit us at:</p>
+          <p class="text-gray-600 font-regular">Bira Village, Bonto Bahari District, Bulukumba Regency, South Sulawesi</p>
+          <p class="text-gray-600 font-regular">Phone: 0812-1152-2277</p>
+          <p class="text-gray-600 font-regular">Instagram: <a href="https://instagram.com/padupparesort" class="text-amber-700 hover:underline font-bold">@padupparesort</a></p>
+        </div>
+        <div>
+          <p class="text-lg text-gray-600 mb-4 font-regular">Opening Hours:</p>
+          <p class="text-gray-600 font-regular">Monday - Sunday: 07:00 - 22:00 WITA</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Reservation Section -->
+  <section id="reserve" class="py-16 bg-amber-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <h2 class="text-3xl font-bold text-center text-amber-800 mb-8">Table Reservation</h2>
+      <form id="reservation-form" class="max-w-lg mx-auto bg-white p-8 rounded-lg shadow-md">
+        <div class="mb-4">
+          <label for="reserve-name" class="block text-amber-800 font-bold mb-2">Name</label>
+          <input type="text" id="reserve-name" class="w-full p-3 border border-amber-300 rounded focus:outline-none focus:border-amber-400 font-regular" placeholder="Enter your name" required>
+        </div>
+        <div class="mb-4">
+          <label for="reserve-date" class="block text-amber-800 font-bold mb-2">Date</label>
+          <input type="date" id="reserve-date" class="w-full p-3 border border-amber-300 rounded focus:outline-none focus:border-amber-400 font-regular" required>
+        </div>
+        <div class="mb-4">
+          <label for="reserve-time" class="block text-amber-800 font-bold mb-2">Time</label>
+          <input type="time" id="reserve-time" class="w-full p-3 border border-amber-300 rounded focus:outline-none focus:border-amber-400 font-regular" required>
+        </div>
+        <div class="mb-4">
+          <label for="reserve-guests" class="block text-amber-800 font-bold mb-2">Number of Guests</label>
+          <input type="number" id="reserve-guests" class="w-full p-3 border border-amber-300 rounded focus:outline-none focus:border-amber-400 font-regular" placeholder="Enter number of guests" min="1" required>
+        </div>
+        <div class="mb-4">
+          <label for="reserve-room-table" class="block text-amber-800 font-bold mb-2">Room or Table Number</label>
+          <input type="text" id="reserve-room-table" class="w-full p-3 border border-amber-300 rounded focus:outline-none focus:border-amber-400 font-regular" placeholder="Enter room or table number">
+        </div>
+        <div class="mb-4">
+          <label for="reserve-phone" class="block text-amber-800 font-bold mb-2">Contact Phone</label>
+          <input type="tel" id="reserve-phone" class="w-full p-3 border border-amber-300 rounded focus:outline-none focus:border-amber-400 font-regular" placeholder="Enter phone number">
+        </div>
+        <div class="mb-4">
+          <label for="reserve-email" class="block text-amber-800 font-bold mb-2">Email</label>
+          <input type="email" id="reserve-email" class="w-full p-3 border border-amber-300 rounded focus:outline-none focus:border-amber-400 font-regular" placeholder="Enter email address">
+        </div>
+        <div class="mb-4">
+          <label for="reserve-requests" class="block text-amber-800 font-bold mb-2">Special Requests</label>
+          <textarea id="reserve-requests" class="w-full p-3 border border-amber-300 rounded focus:outline-none focus:border-amber-400 font-regular" placeholder="Any special requests?" rows="4"></textarea>
+        </div>
+        <div class="text-right">
+          <button type="submit" class="bg-amber-400 text-white px-4 py-2 rounded hover:bg-amber-500 font-bold">Submit Reservation</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="bg-amber-800 text-white py-6">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <p class="font-regular">© 2025 Paduppa Resort Cafe & Resto. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <script>
+    // Smooth scrolling for navigation links
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+      anchor.addEventListener('click', function (e) {
+        e.preventDefault();
+        document.querySelector(this.getAttribute('href')).scrollIntoView({
+          behavior: 'smooth'
+        });
+      });
+    });
+
+    // Shopping Cart Functionality
+    let cart = [];
+
+    // Toggle cart modal
+    const cartToggle = document.getElementById('cart-toggle');
+    const cartModal = document.getElementById('cart-modal');
+    const closeCart = document.getElementById('close-cart');
+    const floatingCheckout = document.getElementById('floating-checkout');
+    const floatingCartCount = document.getElementById('floating-cart-count');
+
+    function openCartModal() {
+      cartModal.classList.remove('hidden');
+      updateCartUI();
+    }
+
+    cartToggle.addEventListener('click', openCartModal);
+    floatingCheckout.addEventListener('click', openCartModal);
+
+    closeCart.addEventListener('click', () => {
+      cartModal.classList.add('hidden');
+    });
+
+    // Add to cart
+    document.querySelectorAll('.add-to-cart').forEach(button => {
+      button.addEventListener('click', () => {
+        const name = button.dataset.name;
+        const price = parseInt(button.dataset.price);
+        const existingItem = cart.find(item => item.name === name);
+
+        if (existingItem) {
+          existingItem.quantity += 1;
+        } else {
+          cart.push({ name, price, quantity: 1 });
+        }
+
+        updateCartUI();
+      });
+    });
+
+    // Update cart UI
+    function updateCartUI() {
+      const cartItems = document.getElementById('cart-items');
+      const cartCount = document.getElementById('cart-count');
+      const cartSubtotal = document.getElementById('cart-subtotal');
+      cartItems.innerHTML = '';
+
+      let total = 0;
+      let itemCount = 0;
+
+      cart.forEach((item, index) => {
+        total += item.price * item.quantity;
+        itemCount += item.quantity;
+
+        const itemElement = document.createElement('div');
+        itemElement.className = 'flex justify-between items-center mb-2';
+        itemElement.innerHTML = `
+          <div>
+            <p class="text-gray-600 font-regular">${item.name} (IDR ${item.price.toLocaleString()})</p>
+            <div class="flex items-center space-x-2">
+              <button class="decrease-quantity text-amber-700 font-bold" data-index="${index}">-</button>
+              <span class="font-regular">${item.quantity}</span>
+              <button class="increase-quantity text-amber-700 font-bold" data-index="${index}">+</button>
+            </div>
+          </div>
+          <p class="text-amber-400 font-bold">IDR ${(item.price * item.quantity).toLocaleString()}</p>
+        `;
+        cartItems.appendChild(itemElement);
+      });
+
+      cartCount.textContent = itemCount;
+      floatingCartCount.textContent = itemCount;
+
+      // Update floating button color
+      floatingCheckout.className = `fixed bottom-6 right-6 ${itemCount > 0 ? 'bg-amber-600' : 'bg-amber-400'} text-white px-4 py-3 rounded-full shadow-lg hover:bg-amber-500 z-20 flex items-center space-x-2`;
+
+      cartSubtotal.textContent = total.toLocaleString();
+
+      // Quantity controls
+      document.querySelectorAll('.increase-quantity').forEach(button => {
+        button.addEventListener('click', () => {
+          const index = button.dataset.index;
+          cart[index].quantity += 1;
+          updateCartUI();
+        });
+      });
+
+      document.querySelectorAll('.decrease-quantity').forEach(button => {
+        button.addEventListener('click', () => {
+          const index = button.dataset.index;
+          if (cart[index].quantity > 1) {
+            cart[index].quantity -= 1;
+          } else {
+            cart.splice(index, 1);
+          }
+          updateCartUI();
+        });
+      });
+    }
+
+    // Confirm Checkout
+    document.getElementById('confirm-checkout').addEventListener('click', async () => {
+      const customerName = document.getElementById('customer-name').value;
+      const room = document.getElementById('room').value;
+      const table = document.getElementById('table').value;
+
+      if (!customerName) {
+        alert('Please enter your name.');
+        return;
+      }
+      if (cart.length === 0) {
+        alert('Your cart is empty.');
+        return;
+      }
+
+      const order = {
+        customerName,
+        room,
+        table,
+        items: cart,
+        subtotal: cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
+      };
+
+      try {
+        const response = await fetch('/api/checkout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(order)
+        });
+        const result = await response.json();
+        if (result.success) {
+          alert('Order submitted successfully! Redirecting to WhatsApp...');
+          window.location.href = result.whatsappUrl;
+          cart = [];
+          updateCartUI();
+          cartModal.classList.add('hidden');
+          document.getElementById('customer-name').value = '';
+          document.getElementById('room').value = '';
+          document.getElementById('table').value = '';
+        } else {
+          alert('Failed to submit order.');
+        }
+      } catch (error) {
+        alert('Error submitting order: ' + error.message);
+      }
+    });
+
+    // Reservation Form Submission
+    document.getElementById('reservation-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const reservation = {
+        name: document.getElementById('reserve-name').value,
+        date: document.getElementById('reserve-date').value,
+        time: document.getElementById('reserve-time').value,
+        guests: document.getElementById('reserve-guests').value,
+        roomTable: document.getElementById('reserve-room-table').value,
+        phone: document.getElementById('reserve-phone').value,
+        email: document.getElementById('reserve-email').value,
+        requests: document.getElementById('reserve-requests').value
+      };
+
+      try {
+        const response = await fetch('/api/reservation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(reservation)
+        });
+        const result = await response.json();
+        if (result.success) {
+          alert('Reservation submitted successfully! Redirecting to WhatsApp...');
+          window.location.href = result.whatsappUrl;
+          document.getElementById('reservation-form').reset();
+        } else {
+          alert('Failed to submit reservation.');
+        }
+      } catch (error) {
+        alert('Error submitting reservation: ' + error.message);
+      }
+    });
+  </script>
+</body>
+</html>
