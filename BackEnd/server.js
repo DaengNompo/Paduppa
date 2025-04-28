@@ -6,7 +6,7 @@ const port = process.env.PORT || 3000;
 const path = require('path');
 
 // Middleware
-app.use(cors({ origin: 'https://paduppa-frontend.vercel.app' }));
+app.use(cors({ origin: 'https://paduppa.vercel.app/' }));
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
