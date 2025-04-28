@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "installCommand": "npm install"
   "builds": [
     {
       "src": "server.js",
@@ -12,4 +13,5 @@
       "dest": "server.js"
     }
   ]
+  
 }
